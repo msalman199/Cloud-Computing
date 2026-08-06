@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"      # Main LocalStack edge port
+    environment:
+      - SERVICES=iam,s3  # Enable IAM and S3 services
+      - DEBUG=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
