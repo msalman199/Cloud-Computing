@@ -1,0 +1,12 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "_____",
+      "Principal": "_____",
+      "Action": "_____",
+      "Resource": "arn:aws:s3:::my-static-site/*"
+    }
+  ]
+}
