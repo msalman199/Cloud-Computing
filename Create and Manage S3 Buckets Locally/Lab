@@ -1,0 +1,149 @@
+Create and Manage S3 Buckets Locally
+Learning Objectives
+By the end of this lab, you will be able to:
+
+Explain the basics of Amazon S3 object storage concepts (buckets, objects, versioning)
+Start a local S3-compatible service using LocalStack and Docker
+Create and manage S3 buckets using the AWS CLI
+Upload, download, and version objects in an S3 bucket
+Clean up cloud storage resources properly
+Prerequisites
+A single Linux machine (provided via Al Nafi Start Lab)
+Basic familiarity with the Linux terminal (running commands, navigating folders)
+No prior AWS experience required
+Internet access to download Docker images and packages
+Environment Setup
+Run these commands on your Al Nafi Linux machine to prepare the lab environment.
+
+Step 1: Install Docker
+# Update package lists
+sudo apt-get update
+
+# Install Docker
+sudo apt-get install -y docker.io
+
+# Start Docker service
+sudo systemctl start docker
+
+# Verify Docker is running
+sudo docker --version
+Step 2: Install AWS CLI
+# Install pip (Python package manager) if not present
+sudo apt-get install -y python3-pip
+
+# Install AWS CLI using pip
+pip3 install awscli --upgrade --user
+
+# Verify installation
+aws --version
+Step 3: Configure Dummy AWS Credentials
+LocalStack does not check real AWS credentials, but the CLI requires some values to be set.
+
+# Set dummy credentials (any values work for LocalStack)
+aws configure set aws_access_key_id test
+aws configure set aws_secret_access_key test
+aws configure set region us-east-1
+Tasks
+Task 1: Start LocalStack with S3 Enabled
+# Run LocalStack container with S3 service enabled
+sudo docker run -d \
+  --name localstack \
+  -p 4566:4566 \
+  -e SERVICES=s3 \
+  localstack/localstack
+
+# Check the container is running
+sudo docker ps
+-p 4566:4566 maps LocalStack's main port to your machine
+-e SERVICES=s3 tells LocalStack to only start the S3 service
+Wait about 10-15 seconds for LocalStack to fully initialize
+Verify LocalStack is ready:
+
+# Check LocalStack health status
+curl http://localhost:4566/_localstack/health
+You should see "s3": "available" in the output.
+
+Task 2: Create an S3 Bucket
+# Create a bucket named my-project-data
+aws --endpoint-url=http://localhost:4566 s3 mb s3://my-project-data
+
+# List all buckets to confirm creation
+aws --endpoint-url=http://localhost:4566 s3 ls
+--endpoint-url redirects the AWS CLI to talk to LocalStack instead of real AWS
+s3 mb means "make bucket"
+Task 3: Upload a Sample File
+# Create a sample text file
+echo "Hello from my first S3 bucket!" > sample.txt
+
+# Upload the file to the bucket
+aws --endpoint-url=http://localhost:4566 s3 cp sample.txt s3://my-project-data/
+
+# List objects in the bucket to verify upload
+aws --endpoint-url=http://localhost:4566 s3 ls s3://my-project-data/
+Task 4: Download and Compare the File
+# Create a separate directory for download
+mkdir ~/downloaded-files
+
+# Download the file into the new directory
+aws --endpoint-url=http://localhost:4566 s3 cp \
+  s3://my-project-data/sample.txt \
+  ~/downloaded-files/sample.txt
+
+# Compare original and downloaded file contents
+diff sample.txt ~/downloaded-files/sample.txt
+
+# TODO: If diff produces no output, the files are identical
+echo "Comparison complete - no output above means files match"
+Task 5: Enable Versioning and Upload a Modified File
+# Enable versioning on the bucket
+aws --endpoint-url=http://localhost:4566 s3api put-bucket-versioning \
+  --bucket my-project-data \
+  --versioning-configuration Status=Enabled
+
+# Modify the sample file
+echo "This is version 2 of the file." >> sample.txt
+
+# Upload the modified file (overwrites the same key)
+aws --endpoint-url=http://localhost:4566 s3 cp sample.txt s3://my-project-data/
+Task 6: List Object Versions
+# List all versions of objects in the bucket
+aws --endpoint-url=http://localhost:4566 s3api list-object-versions \
+  --bucket my-project-data
+Look for the Versions array in the JSON output
+Each version has a unique VersionId
+The most recent version has "IsLatest": true
+Task 7: Delete Object, Delete Bucket, and Confirm Cleanup
+# Delete the object from the bucket
+aws --endpoint-url=http://localhost:4566 s3 rm s3://my-project-data/sample.txt
+
+# Confirm the bucket is now empty
+aws --endpoint-url=http://localhost:4566 s3 ls s3://my-project-data/
+
+# Delete the empty bucket
+aws --endpoint-url=http://localhost:4566 s3 rb s3://my-project-data
+
+# Confirm the bucket no longer exists
+aws --endpoint-url=http://localhost:4566 s3 ls
+s3 rm deletes an object
+s3 rb means "remove bucket" (bucket must be empty first)
+Optional Cleanup: Stop LocalStack
+# Stop and remove the LocalStack container
+sudo docker stop localstack
+sudo docker rm localstack
+Verification
+Confirm your lab work is complete by checking:
+
+ docker ps showed the localstack container running during the lab
+ aws s3 ls (with endpoint URL) showed my-project-data after creation
+ sample.txt appeared in the bucket listing after upload
+ diff command produced no output (downloaded file matched original)
+ list-object-versions output showed at least 2 versions of sample.txt
+ Final aws s3 ls command showed no buckets remaining
+Troubleshooting Tips
+"Could not connect to endpoint" error: Wait 10-15 seconds after starting LocalStack, then retry
+"command not found: aws": Run export PATH=$PATH:~/.local/bin and try again
+Docker permission denied: Use sudo before docker commands, or add your user to the docker group with sudo usermod -aG docker $USER (requires logout/login)
+Bucket already exists error: Someone else may have created it; try a different bucket name or delete the existing one first
+Port 4566 already in use: Stop any existing LocalStack container with sudo docker stop localstack before starting a new one
+Conclusion
+In this lab, you learned the fundamentals of Amazon S3 object storage using LocalStack as a free, local emulator. You started a containerized S3 service with Docker, created and managed a bucket using the AWS CLI, and practiced core storage operations including uploading, downloading, and verifying file integrity. You also enabled versioning to understand how S3 tracks multiple copies of an object over time, and you practiced proper resource cleanup by deleting objects and buckets. These skills directly translate to real-world AWS S3 usage and form a foundational building block for cloud storage administration, a key competency for the AWS Certified Cloud Practitioner certification and Cloud Engineer roles in the GCC IT industry.
