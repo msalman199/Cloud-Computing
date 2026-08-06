@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      # TODO: enable only the dynamodb service
+      - SERVICES=
+      - DEBUG=1
+    volumes:
+      - "./volume:/var/lib/localstack"
