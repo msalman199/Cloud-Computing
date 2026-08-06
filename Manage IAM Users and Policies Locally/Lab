@@ -1,0 +1,205 @@
+Manage IAM Users and Policies Locally
+Objectives
+By the end of this lab, you will be able to:
+
+Start LocalStack, an open-source AWS emulator, using Docker Compose
+Create IAM users and groups using the AWS CLI against a local endpoint
+Attach an inline policy to control S3 access permissions
+Add users to groups and verify group membership
+List and delete IAM resources
+Understand the basic building blocks of AWS IAM (Users, Groups, Policies)
+Prerequisites
+Basic familiarity with the Linux terminal (navigating folders, running commands)
+No prior AWS or IAM experience required
+Al Nafi Linux machine (via Start Lab) with internet access
+Basic understanding that IAM = Identity and Access Management (controls who can do what in AWS)
+Environment Setup
+You will use a single Linux machine provided by Al Nafi. All tools will be installed locally — no real AWS account or billing is needed since LocalStack emulates AWS services on your machine.
+
+Step 1: Install Docker and Docker Compose
+# Update package lists
+sudo apt update
+
+# Install Docker
+sudo apt install -y docker.io docker-compose
+
+# Start Docker service
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Verify installation
+docker --version
+docker-compose --version
+Step 2: Install AWS CLI
+# Download the AWS CLI installer
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+# Unzip the installer
+sudo apt install -y unzip
+unzip awscliv2.zip
+
+# Run the installer
+sudo ./aws/install
+
+# Verify installation
+aws --version
+Tasks
+Task 1: Start LocalStack via Docker Compose
+Create a folder and a docker-compose.yml file to define LocalStack with the IAM service enabled.
+
+# Create a project folder
+mkdir ~/iam-lab && cd ~/iam-lab
+
+# Create the docker-compose.yml file
+nano docker-compose.yml
+Paste the following content into the file:
+
+version: "3.8"
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"      # Main LocalStack edge port
+    environment:
+      - SERVICES=iam,s3  # Enable IAM and S3 services
+      - DEBUG=1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+Start the container:
+
+# Launch LocalStack in the background
+docker-compose up -d
+
+# Check the container is running
+docker ps
+Task 2: Configure AWS CLI for LocalStack
+LocalStack does not check real credentials, but the CLI still requires dummy values.
+
+# Configure fake credentials (required by AWS CLI, not validated by LocalStack)
+aws configure set aws_access_key_id test
+aws configure set aws_secret_access_key test
+aws configure set region us-east-1
+Create a shell alias to always point the CLI to LocalStack:
+
+# Add alias to your current shell session
+alias awslocal="aws --endpoint-url=http://localhost:4566"
+
+# Test the alias
+awslocal iam list-users
+Expected output: an empty Users list (no users created yet).
+
+Task 3: Create the cloud-admin IAM User
+# TODO: Create a user named cloud-admin
+awslocal iam create-user --user-name cloud-admin
+Verify:
+
+awslocal iam get-user --user-name cloud-admin
+Task 4: Create the developers Group with an Inline S3 Read-Only Policy
+# Step 1: Create the group
+awslocal iam create-group --group-name developers
+
+# Step 2: Create a policy JSON file for S3 read-only access
+nano s3-readonly-policy.json
+Paste this policy document:
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+Attach the inline policy to the group:
+
+# TODO: Attach the inline policy to the developers group
+awslocal iam put-group-policy \
+  --group-name developers \
+  --policy-name S3ReadOnlyPolicy \
+  --policy-document file://s3-readonly-policy.json
+Verify the policy was attached:
+
+awslocal iam get-group-policy \
+  --group-name developers \
+  --policy-name S3ReadOnlyPolicy
+Task 5: Add cloud-admin to the developers Group
+# TODO: Add the cloud-admin user to the developers group
+awslocal iam add-user-to-group \
+  --user-name cloud-admin \
+  --group-name developers
+Verify membership:
+
+awslocal iam get-group --group-name developers
+Task 6: Create app-user with Programmatic Access Keys
+# Step 1: Create the second user
+awslocal iam create-user --user-name app-user
+
+# Step 2: Generate access keys for programmatic access
+awslocal iam create-access-key --user-name app-user
+Note: Save the AccessKeyId and SecretAccessKey values printed in the output — in a real environment these would be used to configure a CLI profile or SDK.
+
+Task 7: List All Users and Groups
+# List all IAM users
+awslocal iam list-users
+
+# List all IAM groups
+awslocal iam list-groups
+
+# List members of the developers group
+awslocal iam get-group --group-name developers
+Task 8: Delete app-user and Confirm Removal
+IAM requires access keys to be deleted before the user itself.
+
+# Step 1: List access keys for app-user to get the Access Key ID
+awslocal iam list-access-keys --user-name app-user
+
+# Step 2: Delete the access key (replace <ACCESS_KEY_ID> with actual value)
+awslocal iam delete-access-key \
+  --user-name app-user \
+  --access-key-id <ACCESS_KEY_ID>
+
+# Step 3: Delete the user
+awslocal iam delete-user --user-name app-user
+Verification
+Run these commands to confirm your setup is correct:
+
+# Should show only cloud-admin (app-user deleted)
+awslocal iam list-users
+
+# Should show developers group with cloud-admin as a member
+awslocal iam get-group --group-name developers
+
+# Should confirm the S3 read-only policy still exists
+awslocal iam get-group-policy --group-name developers --policy-name S3ReadOnlyPolicy
+
+# Should return an error confirming app-user no longer exists
+awslocal iam get-user --user-name app-user
+Expected results:
+
+Check	Expected Outcome
+list-users	Only cloud-admin appears
+get-group	cloud-admin listed as group member
+get-group-policy	Policy document returned successfully
+get-user app-user	Error: "NoSuchEntity"
+Troubleshooting Tips
+Docker container not starting: Run docker-compose logs to view error details
+"Connection refused" errors: Wait 10-15 seconds after docker-compose up -d for LocalStack to fully initialize
+awslocal alias not working: Aliases only persist in the current terminal session; re-run the alias command if you open a new terminal, or add it to ~/.bashrc
+Permission denied on Docker commands: Run sudo usermod -aG docker $USER then log out and back in
+Policy JSON errors: Validate your JSON syntax using cat s3-readonly-policy.json | python3 -m json.tool
+Conclusion
+In this lab, you set up LocalStack to emulate AWS IAM on a single Linux machine without needing a real AWS account. You created IAM users (cloud-admin and app-user), built a developers group, and attached an inline policy granting S3 read-only access. You practiced core IAM operations including adding users to groups, generating programmatic access keys, listing resources, and safely deleting a user along with its access keys. These skills directly translate to real-world AWS environments and form a foundational competency for Cloud Security Engineer and IAM Administrator roles, as well as the AWS Certified Cloud Practitioner certification.
+
+Lab Terminal
+
+Daily Lab Time Policy
+By default, your daily lab time depends on your enrolled diploma level or Al Nafi Cloud package.
+If you need more time, you can purchase additional lab hours from alnafi.cloud.
+×
+Instructions
+
