@@ -1,0 +1,175 @@
+Install AWS CLI and LocalStack on Linux
+Course Context
+Domain: Domain 3: Cloud Computing
+Source Course: Introduction to Cloud Computing on AWS for Beginners [2026]
+Complexity: Basic
+Estimated Time: 30-60 minutes
+Learning Objectives
+By the end of this lab, you will be able to:
+
+Install Docker and Docker Compose on a Linux machine
+Install and verify AWS CLI v2
+Configure a local AWS profile for use with LocalStack
+Run LocalStack in a Docker container to emulate AWS services locally
+Verify LocalStack is running correctly
+Create a shortcut command (awslocal) for easier local testing
+Prerequisites
+Basic familiarity with the Linux terminal (running commands, using sudo)
+No prior AWS or Docker experience required
+A single Linux machine (Ubuntu-based) provided via Start Lab
+Environment Setup
+Al Nafi provides a single Linux virtual machine accessible via Start Lab.
+Ensure you have terminal access and an internet connection.
+All commands below are run directly in the terminal on this machine.
+Task 1: Install Docker and Docker Compose
+Docker lets us run LocalStack in an isolated container without installing extra software directly on our machine.
+
+# Update package lists
+sudo apt-get update
+
+# Install required dependencies
+sudo apt-get install -y ca-certificates curl gnupg
+
+# Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+# Add Docker repository to sources list
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update package lists again to include Docker repo
+sudo apt-get update
+
+# Install Docker Engine, CLI, and Compose plugin
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Allow current user to run docker without sudo (log out/in may be required)
+sudo usermod -aG docker $USER
+Verify installation:
+
+docker --version
+docker compose version
+Expected output: version numbers for both Docker and Docker Compose (e.g., Docker version 25.x.x).
+
+Note: If docker commands still require sudo, either continue using sudo docker ... or log out and log back in.
+
+Task 2: Install AWS CLI v2
+# Download the AWS CLI v2 installer
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+
+# Install unzip if not already available
+sudo apt-get install -y unzip
+
+# Unzip the installer package
+unzip awscliv2.zip
+
+# Run the install script
+sudo ./aws/install
+Verify installation:
+
+aws --version
+Expected output similar to: aws-cli/2.x.x Python/3.x.x Linux/x.x.x
+
+Task 3: Configure AWS CLI with a LocalStack Profile
+LocalStack does not check real AWS credentials, but the AWS CLI still requires values to be set. We use dummy values.
+
+# Configure a named profile called "localstack"
+aws configure --profile localstack
+When prompted, enter:
+
+AWS Access Key ID: test
+AWS Secret Access Key: test
+Default region name: us-east-1
+Default output format: json
+Verify the profile was created:
+
+cat ~/.aws/credentials
+cat ~/.aws/config
+You should see a [localstack] section with the values you entered.
+
+Task 4: Pull and Run LocalStack
+# Pull the official LocalStack image from Docker Hub
+docker pull localstack/localstack
+
+# Run LocalStack, mapping the main port 4566 to your machine
+docker run -d \
+  --name localstack \
+  -p 4566:4566 \
+  localstack/localstack
+Command breakdown:
+
+-d runs the container in the background (detached mode)
+--name localstack gives the container a friendly name
+-p 4566:4566 maps container port 4566 to host port 4566 (LocalStack's main gateway port)
+Verify the container is running:
+
+docker ps
+You should see a row with localstack/localstack and status Up.
+
+Task 5: Verify LocalStack Health
+# Install curl if not already present
+sudo apt-get install -y curl
+
+# Query the LocalStack health endpoint
+curl http://localhost:4566/_localstack/health
+Expected output (formatted example):
+
+{
+  "services": {
+    "s3": "available",
+    "dynamodb": "available",
+    "lambda": "available"
+  },
+  "edition": "community"
+}
+If you see JSON output listing services, LocalStack is running correctly.
+
+Task 6: Create the awslocal Alias
+This alias saves time by automatically pointing the AWS CLI to LocalStack's endpoint.
+
+# Add the alias to your shell configuration file
+echo 'alias awslocal="aws --endpoint-url=http://localhost:4566 --profile localstack"' >> ~/.bashrc
+
+# Reload the shell configuration
+source ~/.bashrc
+Test the alias:
+
+# List S3 buckets (should return an empty list, no errors)
+awslocal s3 ls
+Expected output: empty result (no buckets yet) with no connection errors. This confirms awslocal is correctly routing requests to LocalStack.
+
+Verification Checklist
+Run through these checks to confirm the lab was completed successfully:
+
+Check	Command	Expected Result
+Docker installed	docker --version	Version number displayed
+Docker Compose installed	docker compose version	Version number displayed
+AWS CLI installed	aws --version	aws-cli/2.x.x displayed
+Profile configured	cat ~/.aws/config	[profile localstack] section present
+LocalStack running	docker ps	Container localstack status Up
+Health check passes	curl http://localhost:4566/_localstack/health	JSON with "services" key
+Alias works	awslocal s3 ls	Runs without connection error
+Troubleshooting Tips
+"Permission denied" on docker commands: Run newgrp docker or log out and back in after adding your user to the docker group.
+Port 4566 already in use: Stop the conflicting process or remove old containers with docker rm -f localstack.
+aws: command not found: Ensure /usr/local/bin is in your PATH, or re-run sudo ./aws/install.
+curl: (7) Failed to connect: Wait 10-15 seconds after starting LocalStack; it needs time to initialize.
+Alias not recognized: Make sure you ran source ~/.bashrc, or open a new terminal session.
+Conclusion
+In this lab, you successfully set up a local cloud development environment on a single Linux machine. You:
+
+Installed Docker and Docker Compose to run containerized applications
+Installed and verified AWS CLI v2
+Created a localstack profile with dummy credentials for local testing
+Pulled and launched the LocalStack Docker container, exposing port 4566
+Verified LocalStack's health using curl
+Configured an awslocal alias to simplify future AWS CLI commands against LocalStack
+You now have a fully functional, cost-free local AWS emulation environment. This setup forms the foundation for future labs where you will create and interact with services like S3, DynamoDB, and Lambda entirely on your local machine, without incurring any real AWS costs.
+
+Lab Terminal
+
+Instructions
+
