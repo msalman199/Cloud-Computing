@@ -1,0 +1,117 @@
+Build a Custom VPC with Subnets via CLI
+Learning Objectives
+By the end of this lab, you will be able to:
+
+Deploy a VPC with custom CIDR blocks using AWS CLI on LocalStack
+Configure public and private subnets within a VPC
+Attach an internet gateway and configure route tables for internet access
+Verify network topology using AWS CLI describe commands
+Prerequisites
+Basic understanding of networking concepts (CIDR notation, IP addressing)
+Familiarity with AWS VPC components (subnets, route tables, gateways)
+Comfort using a Linux terminal
+Basic AWS CLI command structure knowledge
+Environment Setup
+Al Nafi provides a single Linux machine via Start Lab. Use it for all steps below.
+
+Step 1: Install Docker and LocalStack
+sudo apt update && sudo apt install -y docker.io python3-pip
+sudo systemctl start docker
+pip3 install localstack awscli-local
+Step 2: Start LocalStack with VPC/EC2 services
+# EC2 service covers VPC, subnets, route tables, and gateways
+localstack start -d
+Wait ~10 seconds, then verify it's running:
+
+localstack status services
+Confirm ec2 shows status running.
+
+Step 3: Configure AWS CLI for LocalStack
+aws configure set aws_access_key_id test
+aws configure set aws_secret_access_key test
+aws configure set region us-east-1
+Use awslocal (wraps aws --endpoint-url=http://localhost:4566) for all commands below, or manually append --endpoint-url=http://localhost:4566 to each AWS CLI call.
+
+Tasks
+Task 1: Create the VPC
+Create a VPC with CIDR block 10.0.0.0/16.
+
+awslocal ec2 create-vpc --cidr-block 10.0.0.0/16
+TODO: Capture the VpcId from the output JSON and export it as an environment variable:
+export VPC_ID=<TODO: paste VpcId here>
+Tag the VPC for clarity:
+
+awslocal ec2 create-tags --resources $VPC_ID --tags Key=Name,Value=CustomLabVPC
+Task 2: Create Public and Private Subnets
+Create two subnets inside the VPC:
+
+# Public subnet
+awslocal ec2 create-subnet \
+  --vpc-id $VPC_ID \
+  --cidr-block 10.0.1.0/24
+
+# Private subnet
+awslocal ec2 create-subnet \
+  --vpc-id $VPC_ID \
+  --cidr-block 10.0.2.0/24
+TODO: Capture each SubnetId and export them:
+export PUBLIC_SUBNET_ID=<TODO>
+export PRIVATE_SUBNET_ID=<TODO>
+Tag both subnets appropriately (Name=PublicSubnet / Name=PrivateSubnet) using create-tags as in Task 1.
+
+Task 3: Create and Attach an Internet Gateway
+awslocal ec2 create-internet-gateway
+TODO: Capture InternetGatewayId:
+export IGW_ID=<TODO>
+Attach the gateway to your VPC:
+
+awslocal ec2 attach-internet-gateway \
+  --vpc-id $VPC_ID \
+  --internet-gateway-id $IGW_ID
+Task 4: Create a Route Table with a Default Route
+Create a new route table in the VPC:
+
+awslocal ec2 create-route-table --vpc-id $VPC_ID
+TODO: Capture RouteTableId:
+export RT_ID=<TODO>
+Add a default route (0.0.0.0/0) pointing to the internet gateway:
+
+awslocal ec2 create-route \
+  --route-table-id $RT_ID \
+  --destination-cidr-block 0.0.0.0/0 \
+  --gateway-id $IGW_ID
+Troubleshooting tip: If create-route fails with an invalid gateway error, confirm $IGW_ID is exported correctly and that the gateway attachment in Task 3 succeeded (check with describe-internet-gateways).
+
+Task 5: Associate Route Table with the Public Subnet
+awslocal ec2 associate-route-table \
+  --route-table-id $RT_ID \
+  --subnet-id $PUBLIC_SUBNET_ID
+Note: The private subnet remains associated with the VPC's implicit main route table (no internet route), simulating a private network.
+Verification
+Run the following commands to confirm your topology:
+
+# Verify VPC
+awslocal ec2 describe-vpcs --vpc-ids $VPC_ID
+
+# Verify subnets
+awslocal ec2 describe-subnets --filters Name=vpc-id,Values=$VPC_ID
+
+# Verify internet gateway attachment
+awslocal ec2 describe-internet-gateways --internet-gateway-ids $IGW_ID
+
+# Verify route table and associations
+awslocal ec2 describe-route-tables --route-table-ids $RT_ID
+Expected outcomes:
+
+VPC shows CidrBlock: 10.0.0.0/16 and state available
+Two subnets listed with CIDRs 10.0.1.0/24 and 10.0.2.0/24
+Internet gateway Attachments shows your VPC_ID with state available
+Route table shows a route to 0.0.0.0/0 via $IGW_ID and an association with $PUBLIC_SUBNET_ID
+Troubleshooting
+Issue	Likely Cause	Fix
+VpcID malformed error	Environment variable not exported correctly	Re-run export VPC_ID=... with correct ID
+Subnet CIDR overlaps error	CIDR outside VPC range or duplicate	Confirm subnet CIDR falls within 10.0.0.0/16
+Route creation fails	IGW not attached	Re-check Task 3 attach step
+awslocal: command not found	pip install path not in PATH	Use python3 -m pip install --user awscli-local and restart shell
+Conclusion
+In this lab, you built a custom VPC network topology entirely through the AWS CLI on LocalStack. You created a VPC with a /16 CIDR block, provisioned public and private subnets, attached an internet gateway, and configured a route table to enable internet access for the public subnet only. You then verified the complete topology using describe-* commands. These skills — CIDR planning, gateway attachment, and route table configuration — are foundational for the AWS Certified Solutions Architect - Associate exam and directly applicable to Cloud Network Engineer roles managing production VPC architectures.
