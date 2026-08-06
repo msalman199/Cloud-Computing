@@ -1,0 +1,142 @@
+Create a DynamoDB Table and Perform CRUD
+Objectives
+By the end of this lab, you will be able to:
+
+Run LocalStack (open-source AWS emulator) via Docker Compose
+Create a DynamoDB table with a partition key and provisioned throughput
+Perform Create, Read, Update, Delete (CRUD) operations using AWS CLI
+Query and scan a DynamoDB table
+Clean up resources by deleting items and tables
+Prerequisites
+Basic Linux command-line familiarity
+Understanding of NoSQL concepts (tables, keys, items vs. relational rows)
+Familiarity with JSON syntax
+Docker and Docker Compose installed (or install steps below)
+AWS CLI v2 installed (used only to talk to LocalStack, no real AWS account needed)
+Environment Setup
+You are working on a single Linux machine (provided via Start Lab).
+
+1. Install Docker and Docker Compose (if not present):
+
+sudo apt-get update -y
+sudo apt-get install -y docker.io docker-compose-plugin
+sudo systemctl start docker
+sudo usermod -aG docker $USER && newgrp docker
+2. Install AWS CLI v2:
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+3. Configure dummy AWS credentials (required by CLI, not validated by LocalStack):
+
+aws configure set aws_access_key_id test
+aws configure set aws_secret_access_key test
+aws configure set region us-east-1
+Tasks
+Task 1: Start LocalStack with DynamoDB Enabled
+Create a working directory and a docker-compose.yml file.
+
+mkdir ~/dynamodb-lab && cd ~/dynamodb-lab
+nano docker-compose.yml
+Complete the file below (TODO items must be filled in):
+
+version: "3.8"
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      # TODO: enable only the dynamodb service
+      - SERVICES=
+      - DEBUG=1
+    volumes:
+      - "./volume:/var/lib/localstack"
+Start the container:
+
+docker compose up -d
+docker ps
+Verify DynamoDB endpoint is live:
+
+curl http://localhost:4566/_localstack/health
+Note: All subsequent CLI commands need --endpoint-url http://localhost:4566. To simplify, define an alias:
+
+alias ddb="aws --endpoint-url=http://localhost:4566 dynamodb"
+Task 2: Create the Products Table
+Fill in the missing key schema and throughput values.
+
+ddb create-table \
+  --table-name Products \
+  --attribute-definitions AttributeName=ProductID,AttributeType=S \
+  --key-schema AttributeName=ProductID,KeyType=___ \
+  --provisioned-throughput ReadCapacityUnits=___,WriteCapacityUnits=___
+Confirm creation:
+
+ddb list-tables
+ddb describe-table --table-name Products
+Task 3: Insert Sample Items (Create)
+Insert three products. Complete the second and third put-item commands based on the pattern of the first.
+
+ddb put-item --table-name Products --item '{
+  "ProductID": {"S": "P001"},
+  "Name": {"S": "Laptop"},
+  "Price": {"N": "899.99"},
+  "Stock": {"N": "15"}
+}'
+
+# TODO: Insert P002 - "Wireless Mouse", Price 19.99, Stock 100
+ddb put-item --table-name Products --item '{ ___ }'
+
+# TODO: Insert P003 - "USB-C Hub", Price 29.50, Stock 40
+ddb put-item --table-name Products --item '{ ___ }'
+Task 4: Read an Item (Query)
+Retrieve a specific product by key using get-item:
+
+ddb get-item --table-name Products --key '{"ProductID": {"S": "P001"}}'
+Challenge: Use query (not get-item) to fetch P002, using --key-condition-expression and --expression-attribute-values. Reference the AWS CLI docs for the exact syntax.
+
+ddb query --table-name Products \
+  --key-condition-expression "ProductID = :id" \
+  --expression-attribute-values '{":id": {"S": "___"}}'
+Task 5: Update an Item
+Update the price of P001 to 849.99 using update-item. Complete the expression syntax:
+
+ddb update-item --table-name Products \
+  --key '{"ProductID": {"S": "P001"}}' \
+  --update-expression "SET Price = :newPrice" \
+  --expression-attribute-values '{":newPrice": {"N": "___"}}' \
+  --return-values ALL_NEW
+Verify the update with get-item on P001.
+
+Task 6: Scan the Entire Table
+ddb scan --table-name Products
+Optional filter challenge: Scan only items where Stock is greater than 20. Look up --filter-expression syntax and complete:
+
+ddb scan --table-name Products \
+  --filter-expression "Stock > :minStock" \
+  --expression-attribute-values '{":minStock": {"N": "___"}}'
+Task 7: Delete an Item and the Table
+Delete P003:
+
+ddb delete-item --table-name Products --key '{"ProductID": {"S": "___"}}'
+Confirm it's gone (scan or get-item), then delete the table:
+
+ddb delete-table --table-name Products
+ddb list-tables
+Verification
+Confirm lab completion on the same machine:
+
+docker ps shows localstack container running (before cleanup)
+ddb list-tables initially returned Products, later returns empty list after Task 7
+ddb scan --table-name Products (before deletion) showed 3 items, then 2 after delete
+get-item for P001 after Task 5 shows updated price 849.99
+No errors returned from any CLI command (check for ResourceNotFoundException if table name is mistyped)
+Troubleshooting:
+
+If curl health check fails, run docker logs localstack to check startup errors
+If CLI hangs, confirm --endpoint-url is included or alias is active in current shell
+"Table not found" errors usually mean the table was created in a different region than configured
+Conclusion
+In this lab, you deployed a local DynamoDB environment using LocalStack and Docker Compose, avoiding real AWS costs while learning core serverless database skills. You created a Products table with a partition key, performed full CRUD operations (put-item, get-item, query, update-item, scan, delete-item), and cleaned up by deleting the table. These skills map directly to real-world DynamoDB usage on AWS and are foundational for the AWS Certified Developer - Associate certification and Cloud Developer/DBA roles in the GCC and global cloud market.
