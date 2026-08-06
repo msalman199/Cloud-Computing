@@ -1,0 +1,117 @@
+Host a Static Website with S3 on LocalStack
+Learning Objectives
+By the end of this lab, you will be able to:
+
+Deploy a static website using S3 bucket hosting emulated on LocalStack
+Configure bucket policies to grant public read access
+Upload, verify, and update website content served from a local S3 endpoint
+Prerequisites
+Comfortable with Linux terminal commands and basic AWS S3 concepts (buckets, objects)
+Docker and Docker Compose installed
+Python 3 and pip installed
+Basic understanding of JSON (for bucket policies) and HTML
+Environment Setup
+Al Nafi provides a single Linux machine. Start your lab and open a terminal.
+
+1. Install AWS CLI and LocalStack
+
+pip install awscli-local localstack
+2. Start LocalStack (S3 service)
+
+docker run -d --name localstack -p 4566:4566 \
+  -e SERVICES=s3 \
+  localstack/localstack
+3. Confirm the service is healthy
+
+curl http://localhost:4566/_localstack/health
+TODO: Check the JSON output — the s3 key should show "available" or "running".
+Tasks
+Task 1: Create the S3 Bucket and Enable Static Hosting
+Use awslocal (a wrapper for aws --endpoint-url=http://localhost:4566).
+
+awslocal s3 mb s3://my-static-site
+TODO: Enable static website hosting on the bucket with index.html as the index document and error.html as the error document. Reference the AWS CLI command s3 website:
+awslocal s3 website s3://my-static-site/ \
+  --index-document _____ \
+  --error-document _____
+Task 2: Create the HTML Files
+Create a working directory:
+
+mkdir ~/static-site && cd ~/static-site
+Create index.html:
+
+<!DOCTYPE html>
+<html>
+<head><title>My Static Site</title></head>
+<body>
+  <h1>Welcome to My LocalStack Static Site</h1>
+  <p>Version 1</p>
+</body>
+</html>
+TODO: Create error.html with a simple "404 - Page Not Found" message following the same structure.
+Task 3: Upload Files to the Bucket
+awslocal s3 cp index.html s3://my-static-site/
+awslocal s3 cp error.html s3://my-static-site/
+TODO: Verify both objects exist using awslocal s3 ls s3://my-static-site/
+Task 4: Apply a Public Read Bucket Policy
+Create a file named policy.json. Complete the missing fields:
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "_____",
+      "Principal": "_____",
+      "Action": "_____",
+      "Resource": "arn:aws:s3:::my-static-site/*"
+    }
+  ]
+}
+Hints:
+
+Effect should allow access
+Principal should be "*" for public access
+Action should permit reading objects (s3:GetObject)
+Apply the policy:
+
+awslocal s3api put-bucket-policy \
+  --bucket my-static-site \
+  --policy file://policy.json
+Task 5: Access the Website
+LocalStack serves static websites via a path-style or virtual-host-style URL. Try:
+
+curl http://localhost:4566/my-static-site/index.html
+TODO: Confirm the HTML content of index.html is returned in the terminal output.
+Optional: Open the same URL in a browser if the lab machine has a GUI.
+Task 6: Update and Redeploy Content
+Edit index.html — change "Version 1" to "Version 2" and add one new line of content.
+Re-upload the file:
+awslocal s3 cp index.html s3://my-static-site/
+Re-run the curl command from Task 5 and confirm the updated content appears.
+Verification
+Run the following checks to confirm successful completion:
+
+# Check bucket exists
+awslocal s3 ls
+
+# Check website configuration
+awslocal s3api get-bucket-website --bucket my-static-site
+
+# Check bucket policy applied
+awslocal s3api get-bucket-policy --bucket my-static-site
+
+# Confirm updated content is live
+curl http://localhost:4566/my-static-site/index.html | grep "Version 2"
+Expected outcomes:
+
+Bucket my-static-site listed and configured for website hosting
+Policy shows "Effect": "Allow" and "Principal": "*"
+curl output contains the updated "Version 2" text
+Troubleshooting
+LocalStack container not responding: Run docker ps to confirm it's running; check logs with docker logs localstack
+awslocal: command not found: Reinstall with pip install awscli-local and ensure your PATH includes pip's bin directory
+Policy rejected: Validate JSON syntax with cat policy.json | python3 -m json.tool
+404 on curl: Confirm object key names match exactly (index.html, case-sensitive) and bucket website config was applied
+Conclusion
+In this lab, you deployed a fully functional static website using an S3 bucket emulated locally through LocalStack. You configured website hosting settings, wrote and uploaded HTML files, applied a public-read bucket policy using JSON IAM syntax, and verified content delivery via curl. You also practiced the update-and-redeploy workflow common in real-world static site management. These skills mirror actual AWS S3 static hosting workflows used by Cloud and Web Developers, while using a cost-free, local-only environment suitable for practice and experimentation.
